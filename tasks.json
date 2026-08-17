@@ -1,0 +1,23 @@
+{
+  "setupTasks": [
+    {
+      "name": "Install Dependencies",
+      "command": "yarn install && if [ -d hls-proxy ] && [ -f hls-proxy/package.json ]; then cd hls-proxy && npm install; fi"
+    },
+    {
+      "name": "Install Cloudflared",
+      "command": "if ! command -v cloudflared >/dev/null 2>&1; then sudo mkdir -p --mode=0755 /usr/share/keyrings && curl -fsSL https://pkg.cloudflare.com/cloudflare-public-v2.gpg | sudo tee /usr/share/keyrings/cloudflare-public-v2.gpg >/dev/null && echo 'deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null && sudo apt-get update && sudo apt-get install -y cloudflared; fi"
+    }
+  ],
+  "tasks": {
+    "start": {
+      "name": "Start HLS Proxy + Cloudflare",
+      "command": "sh -c 'set -e; echo \"========================================\"; echo \" Starting HLS Proxy + Cloudflare\"; echo \"========================================\"; if ! command -v cloudflared >/dev/null 2>&1; then echo \"Installing cloudflared...\"; sudo mkdir -p --mode=0755 /usr/share/keyrings; curl -fsSL https://pkg.cloudflare.com/cloudflare-public-v2.gpg | sudo tee /usr/share/keyrings/cloudflare-public-v2.gpg >/dev/null; echo \"deb [signed-by=/usr/share/keyrings/cloudflare-public-v2.gpg] https://pkg.cloudflare.com/cloudflared any main\" | sudo tee /etc/apt/sources.list.d/cloudflared.list >/dev/null; sudo apt-get update; sudo apt-get install -y cloudflared; fi; echo \"cloudflared: $(cloudflared --version)\"; if [ ! -d hls-proxy ]; then echo \"ERROR: hls-proxy directory not found\"; exit 1; fi; if [ ! -f hls-proxy/server.js ]; then echo \"ERROR: hls-proxy/server.js not found\"; exit 1; fi; echo \"Installing HLS dependencies...\"; cd hls-proxy; if [ -f package.json ]; then if [ -f yarn.lock ]; then yarn install --frozen-lockfile; elif [ -f package-lock.json ]; then npm install; else npm install; fi; fi; echo \"Starting HLS proxy...\"; node server.js > /tmp/hls-proxy.log 2>&1 & HLS_PID=$!; cd ..; sleep 3; if ! kill -0 $HLS_PID 2>/dev/null; then echo \"HLS process check failed, checking port 3000...\"; fi; if command -v ss >/dev/null 2>&1; then if ! ss -ltn 2>/dev/null | grep -q \":3000 \"; then echo \"ERROR: HLS proxy is not listening on port 3000\"; cat /tmp/hls-proxy.log 2>/dev/null || true; exit 1; fi; else if ! curl -sS --connect-timeout 2 --max-time 3 http://127.0.0.1:3000/ >/dev/null 2>&1; then echo \"ERROR: HLS proxy is not responding on port 3000\"; cat /tmp/hls-proxy.log 2>/dev/null || true; exit 1; fi; fi; echo \"HLS proxy is running on port 3000\"; echo \"Starting Cloudflare tunnel...\"; cloudflared tunnel run --token \"eyJhIjoiNDk5ZmQ5Mzc5MDRjYWJhOGRmODJjNzI1ZGU0ZWRlNTQiLCJ0IjoiNzQyNzk5NDAtOGRiYi00NDM4LWE4ZGQtZmVkOTkxMGUxY2Y5IiwicyI6Ik5EQXhOR1ptWVRjdFpURmpNUzAwWWpnMExXRTBNREV0WldKa01UYzFOalJtWlRjMCJ9\"'",
+      "runAtStart": true
+    },
+    "install": {
+      "name": "Install Dependencies",
+      "command": "yarn install && if [ -d hls-proxy ] && [ -f hls-proxy/package.json ]; then cd hls-proxy && npm install; fi"
+    }
+  }
+}
